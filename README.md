@@ -1,4 +1,4 @@
-# diy-head-tracking-xplane
+# DIY Head Tracking - X-Plane plugin
 
 ## Overview
 
@@ -13,7 +13,7 @@ It's in very early state, there're still tons of things to do.
 ## Useful links
 
 1. [server-part] The server part of the system.
-2. [x-plane-sdk]
+2. [X-Plane SDK]
 
 [server-part]: https://github.com/artem-zh/diy-head-tracking-server
-[x-plane-sdk]: http://www.xsquawkbox.net/xpsdk/mediawiki/Main_Page
+[X-Plane SDK]: http://www.xsquawkbox.net/xpsdk/mediawiki/Main_Page
