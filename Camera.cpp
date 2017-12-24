@@ -65,6 +65,7 @@ static bool my_camera_engaged = false;
 // TODO make atomic
 static float head_offset = 0.0;
 static float pitch_offset = 0.0;
+static float pitch_offset_start = 0.0;
 
 static unique_ptr<thread> tcp_client_thread;
 
@@ -129,7 +130,9 @@ void tcp_client_worker() {
     float pitch_new_offset = pitch;
     if (pitch_new_offset > 70.0) new_offset = 70.0;
     if (pitch_new_offset < -70.0) new_offset = -70.0;
-    pitch_offset = pitch_new_offset;
+    // negate the value, 'cause for x-plane "moving up - positive pitch",
+    // while for the server it's the opposite.
+    pitch_offset = - pitch_new_offset;
   }
 
   close(sockfd);
@@ -194,7 +197,7 @@ float HeadUpdateFlightLoopCallback(
 
     // TODO Set the values only when they have actually been changed.
     XPLMSetDataf(pilot_head_heading_ref, norm_head_offset);
-    XPLMSetDataf(pilot_head_pitch_ref, pitch_offset);
+    XPLMSetDataf(pilot_head_pitch_ref, pitch_offset_start + pitch_offset);
 
     // Call the callback again in 50ms.
     return 0.05;
@@ -207,6 +210,7 @@ void MyHotKeyCallback(void *inRefcon) {
   if (!my_camera_engaged) {
     XPLMDebugString("Get camera control!");
 
+    pitch_offset_start = XPLMGetDataf(pilot_head_pitch_ref);
     head_offset = 0.0;
     pitch_offset = 0.0;
     
