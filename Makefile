@@ -1,6 +1,6 @@
 BUILDDIR	:=	./build
 SRC_BASE	:=	.
-TARGET		:= Camera
+TARGET		:= DIYHeadTracking
 
 SOURCES = \
 	Camera.cpp

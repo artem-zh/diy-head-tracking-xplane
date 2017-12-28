@@ -72,12 +72,15 @@ static unique_ptr<thread> tcp_client_thread;
 // TODO make atomic
 static bool client_run = false;
 
+static XPLMCommandRef rotateLeftCmd = NULL;
+static XPLMCommandRef rotateRightCmd = NULL;
 
 static XPLMDataRef  pilot_head_x_ref;
 static XPLMDataRef  pilot_head_y_ref;
 static XPLMDataRef  pilot_head_z_ref;
 static XPLMDataRef  pilot_head_heading_ref;
 static XPLMDataRef  pilot_head_pitch_ref;
+static XPLMDataRef  view_type_ref;
 
 void tcp_client_worker() {
   XPLMDebugString("Client thread started.");
@@ -149,8 +152,12 @@ PLUGIN_API int XPluginStart( char *     outName,
   pilot_head_x_ref = XPLMFindDataRef("sim/graphics/view/pilots_head_x");
   pilot_head_y_ref = XPLMFindDataRef("sim/graphics/view/pilots_head_y");
   pilot_head_z_ref = XPLMFindDataRef("sim/graphics/view/pilots_head_z");
+  view_type_ref = XPLMFindDataRef("sim/graphics/view/view_type");
   pilot_head_heading_ref = XPLMFindDataRef("sim/graphics/view/pilots_head_psi");
   pilot_head_pitch_ref = XPLMFindDataRef("sim/graphics/view/pilots_head_the");
+
+  rotateLeftCmd = XPLMFindCommand("sim/general/rot_left");
+  rotateRightCmd = XPLMFindCommand("sim/general/rot_right");
 
   /* Register our hot key. */
   gHotKey = XPLMRegisterHotKey(XPLM_VK_F8, xplm_DownFlag, 
@@ -167,6 +174,8 @@ PLUGIN_API void	XPluginStop(void) {
  
  
 PLUGIN_API void XPluginDisable(void) {
+  client_run = false;
+  my_camera_engaged = false;
   XPLMUnregisterFlightLoopCallback(HeadUpdateFlightLoopCallback, 0);
 }
  
@@ -189,15 +198,61 @@ float HeadUpdateFlightLoopCallback(
                            void *               inRefcon) {
   if (my_camera_engaged) {
     float norm_head_offset = 0.0;
+
     if (head_offset < 0.0) {
       norm_head_offset = 360.0 + head_offset;
     } else {
       norm_head_offset = head_offset;
     }
 
-    // TODO Set the values only when they have actually been changed.
-    XPLMSetDataf(pilot_head_heading_ref, norm_head_offset);
-    XPLMSetDataf(pilot_head_pitch_ref, pitch_offset_start + pitch_offset);
+    int view_type = XPLMGetDatai(view_type_ref);
+    if (view_type == 1000 || (view_type >= 1004 && view_type <= 1007)) {
+      // 2D mode ('Forward' and other views)
+      // TODO Add moving up and down for 'Forward' (1000) mode.
+
+      float current_head_heading_2d_f = XPLMGetDataf(pilot_head_heading_ref);
+      int current_head_heading_2d = 360 + (int) current_head_heading_2d_f;
+
+      float descreted_heading = 360;
+      if (norm_head_offset > 337.5 && norm_head_offset <= 22.5) {          // 0  : 337.5 -  22.5
+        descreted_heading = 360;
+      } else if (norm_head_offset > 22.5 && norm_head_offset <= 67.5) {    // 45 :  22.5 -  67.5
+        descreted_heading = 360 + 45;
+      } else if (norm_head_offset > 292.5 && norm_head_offset <= 337.5) {  // 315: 292.5 - 337.5
+        descreted_heading = 315;
+      } else if (norm_head_offset > 67.5 && norm_head_offset <= 112.5) {   // 90 :  67.5 - 112.5
+        descreted_heading = 360 + 90;
+      } else if (norm_head_offset > 247.5 && norm_head_offset <= 292.5) {  // 270: 247.5 - 292.5
+        descreted_heading = 270;
+      }
+      
+      // Ignore these, because they are impossible for now:
+      // 135: 112.5 - 157.5
+      // 225: 202.5 - 247.5
+      // 180: 157.5 - 202.5
+
+      int diff = (int)(descreted_heading - (float)current_head_heading_2d);
+
+      if (diff != 0) {
+        int num_turns = abs(diff / 45);
+    
+        XPLMCommandRef cmd;
+        if (diff < 0) {
+          cmd = rotateLeftCmd;
+        } else {
+          cmd = rotateRightCmd;
+        }
+        for (int i = 0; i<num_turns; i++) {
+          XPLMCommandOnce(cmd);
+        }
+      }
+    } else if (view_type == 1026) {
+      // 3D Cockpit
+
+      // TODO Set the values only when they have actually been changed.
+      XPLMSetDataf(pilot_head_heading_ref, norm_head_offset);
+      XPLMSetDataf(pilot_head_pitch_ref, pitch_offset_start + pitch_offset);
+    }
 
     // Call the callback again in 50ms.
     return 0.05;
@@ -207,6 +262,8 @@ float HeadUpdateFlightLoopCallback(
 }
 
 void MyHotKeyCallback(void *inRefcon) {
+
+
   if (!my_camera_engaged) {
     XPLMDebugString("Get camera control!");
 
